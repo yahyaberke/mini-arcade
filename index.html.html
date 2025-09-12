@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎮 Mini Arcade V3 - Ölme Yok Modu</title>
+<style>
+body { margin:0; font-family:'Segoe UI',sans-serif; background:#111; color:#fff; text-align:center; }
+header { background:#222; padding:20px; }
+header h1 { margin:0; font-size:28px; color:#00ff88; }
+#menu { display:flex; justify-content:center; flex-wrap:wrap; gap:15px; padding:20px; }
+.game-btn { background:#333; border:2px solid #00ff88; color:#fff; padding:15px 30px; border-radius:10px; cursor:pointer; font-size:18px; transition:0.3s; }
+.game-btn:hover { background:#00ff88; color:#111; }
+#gameArea { margin:20px auto; max-width:800px; background:#000; border:2px solid #00ff88; border-radius:10px; padding:10px; }
+canvas { display:block; margin:0 auto; background:#000; width:100%; height:auto; max-width:800px; }
+#customAlert { opacity:0; transition: opacity 0.5s ease; position: fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; color:#0ff; padding:20px 30px; border-radius:12px; font-size:20px; font-weight:bold; display:none; box-shadow:0 0 20px #0ff; z-index:9999; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+<h1>🎮 Mini Arcade V3 - Ölme Yok Modu</h1>
+</header>
+
+<div id="customAlert">Oyun Bitti! 🎮</div>
+
+<div id="menu">
+<button class="game-btn" onclick="loadGame('snake')">🐍 Yılan</button>
+<button class="game-btn" onclick="loadGame('pong')">🏓 Pong</button>
+<button class="game-btn" onclick="loadGame('tetris')">🧱 Tetris</button>
+<button class="game-btn" onclick="loadGame('flappy')">🐦 Flappy Bird</button>
+<button class="game-btn" onclick="loadGame('car')">🚗 Araba Yarışı</button>
+</div>
+
+<div style="position:absolute; top:10px; right:10px;">
+<button onclick="logout()" style="padding:8px 12px; background:#f00; color:#fff; border:none; border-radius:6px;">Güvenli Çıkış</button>
+</div>
+
+<div style="position:absolute; top:10px; right:130px; background:#222; color:#0ff; padding:8px 12px; border-radius:6px;">
+Coin: <span id="coinDisplay">0</span>
+</div>
+
+<div id="gameArea">
+<p>Bir oyun seçmek için yukarıdaki butonlara tıkla 🚀</p>
+<div id="canvasContainer"></div>
+</div>
+
+<script>
+function logout(){
+  alert("Çok üzgünüz, gitme lütfen 😢");
+  localStorage.removeItem("loggedInUser");
+  window.location.href="login.html";
+}
+
+function updateCoinDisplay(){
+  const user=JSON.parse(localStorage.getItem("loggedInUser"));
+  document.getElementById("coinDisplay").textContent=user?.coin||0;
+}
+updateCoinDisplay();
+
+function showCustomAlert(message){
+  const alertBox=document.getElementById("customAlert");
+  alertBox.textContent=message;
+  alertBox.style.display="block";
+  alertBox.classList.add("show");
+  setTimeout(()=>{ alertBox.classList.remove("show"); alertBox.style.display="none"; },3000);
+}
+
+function updateUserCoin(earnedCoin){
+  const loggedInUser=JSON.parse(localStorage.getItem("loggedInUser"));
+  const users=JSON.parse(localStorage.getItem("users")||"[]");
+  const index=users.findIndex(u=>u["Kullanıcı Adı"]===loggedInUser["Kullanıcı Adı"]);
+  if(index!==-1){
+    users[index]["coin"]=(users[index]["coin"]||0)+earnedCoin;
+    localStorage.setItem("users",JSON.stringify(users));
+    localStorage.setItem("loggedInUser",JSON.stringify(users[index]));
+  }
+  updateCoinDisplay();
+}
+
+function loadGame(game){
+  if(window.currentGameInterval) clearInterval(window.currentGameInterval);
+  const container=document.getElementById("canvasContainer");
+  container.innerHTML="";
+  if(game==="snake") startSnake(container);
+  else if(game==="pong") startPong(container);
+  else if(game==="tetris") startTetris(container);
+  else if(game==="flappy") startFlappy(container);
+  else if(game==="car") startCar(container);
+}
+
+// ---------------- Snake ----------------
+function startSnake(container){
+  container.innerHTML="<canvas id='snakeCanvas' width='400' height='400'></canvas>";
+  const canvas=document.getElementById("snakeCanvas");
+  const ctx=canvas.getContext("2d");
+  const box=20;
+  let snake=[{x:9*box,y:10*box}];
+  let food={x:Math.floor(Math.random()*19+1)*box, y:Math.floor(Math.random()*19+1)*box};
+  let d="RIGHT";
+  let score=0;
+
+  document.onkeydown=function(event){
+    if(event.keyCode===37 && d!=="RIGHT") d="LEFT";
+    else if(event.keyCode===38 && d!=="DOWN") d="UP";
+    else if(event.keyCode===39 && d!=="LEFT") d="RIGHT";
+    else if(event.keyCode===40 && d!=="UP") d="DOWN";
+  };
+
+  function collision(head,array){ return array.some(segment=>segment.x===head.x && segment.y===head.y); }
+
+  function draw(){
+    ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    snake.forEach((segment,i)=>{
+      ctx.fillStyle=(i===0)?"#00ff88":"#fff";
+      ctx.fillRect(segment.x,segment.y,box,box);
+    });
+
+    ctx.fillStyle="red"; ctx.fillRect(food.x,food.y,box,box);
+
+    let snakeX=snake[0].x;
+    let snakeY=snake[0].y;
+    if(d==="LEFT") snakeX-=box;
+    if(d==="UP") snakeY-=box;
+    if(d==="RIGHT") snakeX+=box;
+    if(d==="DOWN") snakeY+=box;
+
+    if(snakeX===food.x && snakeY===food.y){
+      food={x:Math.floor(Math.random()*19+1)*box, y:Math.floor(Math.random()*19+1)*box};
+      score++;
+    } else snake.pop();
+
+    const newHead={x:snakeX,y:snakeY};
+    if(snakeX<0 || snakeY<0 || snakeX>=canvas.width || snakeY>=canvas.height || collision(newHead,snake)){
+      const earnedCoin=Math.floor(score/10);
+      updateUserCoin(earnedCoin);
+      showCustomAlert("Oyun Bitti! 🟥");
+      snake=[{x:9*box,y:10*box}]; score=0;
+      food={x:Math.floor(Math.random()*19+1)*box, y:Math.floor(Math.random()*19+1)*box};
+      d="RIGHT";
+    }
+    snake.unshift(newHead);
+  }
+
+  window.currentGameInterval=setInterval(draw,100);
+}
+
+// ---------------- Pong ----------------
+function startPong(container){
+  container.innerHTML="<canvas id='pongCanvas' width='500' height='300'></canvas>";
+  const canvas=document.getElementById("pongCanvas");
+  const ctx=canvas.getContext("2d");
+  const paddleH=75,paddleW=10;
+  let playerY=(canvas.height-paddleH)/2;
+  let aiY=(canvas.height-paddleH)/2;
+  let ballX=canvas.width/2, ballY=canvas.height/2;
+  const ballR=10;
+  let dx=2,dy=-2;
+  let playerScore=0, aiScore=0;
+
+  document.onmousemove=e=>{
+    const relativeY=e.clientY-canvas.getBoundingClientRect().top;
+    if(relativeY>0 && relativeY<canvas.height) playerY=relativeY-paddleH/2;
+  };
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#00ff88";
+    ctx.fillRect(0,playerY,paddleW,paddleH);
+    ctx.fillRect(canvas.width-paddleW,aiY,paddleW,paddleH);
+    ctx.beginPath(); ctx.arc(ballX,ballY,ballR,0,Math.PI*2); ctx.fillStyle="#fff"; ctx.fill(); ctx.closePath();
+    ctx.font="16px Arial"; ctx.fillStyle="#fff";
+    ctx.fillText(`Oyuncu: ${playerScore}`,20,20);
+    ctx.fillText(`AI: ${aiScore}`,canvas.width-60,20);
+
+    ballX+=dx; ballY+=dy;
+    if(ballY+dy<ballR || ballY+dy>canvas.height-ballR) dy=-dy;
+    if(ballX-ballR<paddleW && ballY>playerY && ballY<playerY+paddleH) dx=-dx;
+    if(ballX+ballR>canvas.width-paddleW && ballY>aiY && ballY<aiY+paddleH) dx=-dx;
+
+    if(ballX+dx<0){ aiScore++; ballX=canvas.width/2; ballY=canvas.height/2; }
+    else if(ballX+dx>canvas.width){ playerScore++; ballX=canvas.width/2; ballY=canvas.height/2; }
+
+    aiY+=(ballY-(aiY+paddleH/2))*0.05;
+  }
+
+  window.currentGameInterval=setInterval(draw,20);
+}
+
+// ---------------- Tetris ----------------
+function startTetris(container){
+  container.innerHTML="<canvas id='tetrisCanvas' width='240' height='400'></canvas>";
+  const canvas=document.getElementById("tetrisCanvas");
+  const ctx=canvas.getContext("2d");
+  const COLS=10,ROWS=20,BLOCK=20;
+  canvas.width=COLS*BLOCK; canvas.height=ROWS*BLOCK;
+  const COLORS=["#00ff88","#ff0055","#ffaa00","#00aaff","#aa00ff","#00ffff","#ffffff"];
+  const SHAPES=[[[1,1,1,1]],[[1,1],[1,1]],[[0,1,0],[1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[1,1,0],[0,1,1]],[[0,1,1],[1,1,0]]];
+  let board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  let current=createPiece(), score=0;
+
+  function createPiece(){
+    const t=Math.floor(Math.random()*SHAPES.length);
+    return {shape:SHAPES[t], color:COLORS[t], x:3, y:0};
+  }
+
+  function drawBlock(x,y,color){
+    ctx.fillStyle=color; ctx.fillRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+    ctx.strokeStyle="#111"; ctx.strokeRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+  }
+
+  function drawBoard(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let y=0;y<ROWS;y++){
+      for(let x=0;x<COLS;x++){
+        if(board[y][x]) drawBlock(x,y,board[y][x]);
+      }
+    }
+    current.shape.forEach((row,dy)=>row.forEach((v,dx)=>{if(v) drawBlock(current.x+dx,current.y+dy,current.color)}));
+    ctx.fillStyle="#fff"; ctx.font="16px Arial"; ctx.fillText(`Skor: ${score}`,10,390);
+  }
+
+  function move(dir){ current.x+=dir; if(collides()) current.x-=dir; }
+  function rotate(){ const old=current.shape; const rotated=current.shape[0].map((_,i)=>current.shape.map(r=>r[i])).reverse(); current.shape=rotated; if(collides()) current.shape=old; }
+  function collides(){ return current.shape.some((row,dy)=>row.some((v,dx)=>v && (board[current.y+dy]?.[current.x+dx]!==0 || current.x+dx<0 || current.x+dx>=COLS || current.y+dy>=ROWS))); }
+  function merge(){ current.shape.forEach((row,dy)=>row.forEach((v,dx)=>{if(v) board[current.y+dy][current.x+dx]=current.color})); clearLines(); }
+  function clearLines(){ for(let y=ROWS-1;y>=0;y--){ if(board[y].every(c=>c)){ board.splice(y,1); board.unshift(Array(COLS).fill(0)); score+=10; y++; } } }
+
+  function drop(){ current.y++; if(collides()){ current.y--; merge(); current=createPiece(); if(collides()){ const earnedCoin=Math.floor(score/10); updateUserCoin(earnedCoin); showCustomAlert("Oyun Bitti! 🟥"); board=Array.from({length:ROWS},()=>Array(COLS).fill(0)); score=0; } } }
+
+  document.onkeydown=e=>{ if(e.keyCode===37) move(-1); else if(e.keyCode===39) move(1); else if(e.keyCode===40) drop(); else if(e.keyCode===38) rotate(); }
+
+  window.currentGameInterval=setInterval(()=>{ drop(); drawBoard(); },500);
+}
+
+// ---------------- Flappy Bird ----------------
+function startFlappy(container){
+  if(window.currentGameInterval) clearInterval(window.currentGameInterval);
+  container.innerHTML="<canvas id='flappyCanvas' width='320' height='480'></canvas>";
+  const canvas=document.getElementById("flappyCanvas");
+  const ctx=canvas.getContext("2d");
+  let birdY=150, gravity=1.5, velocity=0, score=0;
+  let pipes=[{x:canvas.width,y:Math.random()*150-150}];
+
+  document.onkeydown=e=>{ if(e.keyCode===32) velocity=-20; }
+
+  function drawFlappy(){
+    ctx.fillStyle="#70c5ce"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="yellow"; ctx.beginPath(); ctx.arc(50,birdY,15,0,Math.PI*2); ctx.fill(); ctx.closePath();
+
+    for(let i=0;i<pipes.length;i++){
+      const gap=100;
+      ctx.fillStyle="green"; 
+      ctx.fillRect(pipes[i].x,pipes[i].y,50,200);
+      ctx.fillRect(pipes[i].x,pipes[i].y+200+gap,50,canvas.height);
+
+      pipes[i].x--;
+
+      // Çarpışma kontrolü
+      if(50+15>pipes[i].x && 50-15<pipes[i].x+50 && (birdY-15<pipes[i].y+200 || birdY+15>pipes[i].y+200+gap)){
+        const earnedCoin = Math.floor(score / 1);
+        updateUserCoin(earnedCoin);
+        updateCoinDisplay();
+        showCustomAlert("Flappy Bird: Oyun Bitti! 🟥");
+        clearInterval(window.currentGameInterval);
+        return; // oyun durur
+      }
+    }
+
+    birdY+=gravity+velocity*0.1;
+    velocity+=1.5;
+
+    if(pipes[pipes.length-1].x<canvas.width-150){
+      pipes.push({x:canvas.width,y:Math.random()*150-150});
+    }
+
+    pipes.forEach((pipe,i)=>{
+      if(pipe.x+50<0){ pipes.splice(i,1); i--; score++; }
+    });
+
+    ctx.fillStyle="#0ff"; ctx.font="20px Arial"; ctx.fillText(`Skor: ${score}`,10,30);
+  }
+
+  window.currentGameInterval=setInterval(drawFlappy,20);
+}
+
+// ---------------- Araba Yarışı ----------------
+function startCar(container){
+  if(window.currentGameInterval) clearInterval(window.currentGameInterval);
+  container.innerHTML="<canvas id='carCanvas' width='300' height='500'></canvas>";
+  const canvas=document.getElementById("carCanvas");
+  const ctx=canvas.getContext("2d");
+  let car={x:130,y:400,w:40,h:80}, obstacles=[], score=0;
+
+  document.onkeydown=e=>{
+    if(e.keyCode===37 && car.x>0) car.x-=20;
+    if(e.keyCode===39 && car.x<canvas.width-car.w) car.x+=20;
+  };
+
+  function drawCarGame(){
+    ctx.fillStyle="#444"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="red"; ctx.fillRect(car.x,car.y,car.w,car.h);
+
+    if(obstacles.length===0 || obstacles[obstacles.length-1].y>150){
+      const obsW=Math.floor(Math.random()*100)+50;
+      const obsX=Math.floor(Math.random()*(canvas.width-obsW));
+      obstacles.push({x:obsX,y:-50,w:obsW,h:20});
+    }
+
+    for(let i=0;i<obstacles.length;i++){
+      ctx.fillStyle="green"; ctx.fillRect(obstacles[i].x,obstacles[i].y,obstacles[i].w,obstacles[i].h);
+      obstacles[i].y+=5;
+
+      if(car.x<obstacles[i].x+obstacles[i].w && car.x+car.w>obstacles[i].x && car.y<obstacles[i].y+obstacles[i].h && car.y+car.h>obstacles[i].y){
+        const earnedCoin = Math.floor(score / 1);
+        updateUserCoin(earnedCoin);
+        updateCoinDisplay();
+        showCustomAlert("Araba Yarışı: Oyun Bitti! 🟥");
+        clearInterval(window.currentGameInterval);
+        return; // oyun durur
+      }
+
+      if(obstacles[i].y>canvas.height){ obstacles.splice(i,1); i--; score++; }
+    }
+
+    ctx.fillStyle="#0ff"; ctx.font="20px Arial"; ctx.fillText(`Skor: ${score}`,10,30);
+  }
+
+  window.currentGameInterval=setInterval(drawCarGame,20);
+}
+
+
+</script>
+</body>
+</html>
